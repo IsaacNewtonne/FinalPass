@@ -26,3 +26,7 @@ Then open `http://localhost:8080`.
 4. Select the `main` branch and `/ (root)`, then save.
 
 No application server is required. GitHub Pages serves the files, and the game runs entirely in the browser. The only external runtime dependency is Three.js, loaded from jsDelivr.
+
+## Music
+
+The in-game radio uses the YouTube IFrame Player API and four Hip Hop Circuit playlists. Music starts after the player presses **Start Engine**, satisfying browser autoplay rules. YouTube and the playlist owners retain control of playback availability.

@@ -93,6 +93,31 @@ function initAudio(){if(audio)return;audio=new (window.AudioContext||window.webk
 function audioShot(){if(!audio)return;const o=audio.createOscillator(),g=audio.createGain();o.type='sawtooth';o.frequency.setValueAtTime(140,audio.currentTime);o.frequency.exponentialRampToValueAtTime(45,audio.currentTime+.08);g.gain.setValueAtTime(.18,audio.currentTime);g.gain.exponentialRampToValueAtTime(.001,audio.currentTime+.1);o.connect(g).connect(audio.destination);o.start();o.stop(audio.currentTime+.1)}
 function audioBoom(){if(!audio)return;const len=audio.sampleRate*.35,b=audio.createBuffer(1,len,audio.sampleRate),data=b.getChannelData(0);for(let i=0;i<len;i++)data[i]=(Math.random()*2-1)*Math.pow(1-i/len,2);const s=audio.createBufferSource(),g=audio.createGain();s.buffer=b;g.gain.value=.35;s.connect(g).connect(audio.destination);s.start()}
 
+// YouTube-backed in-game radio. Playback begins only after the player's click.
+const radioPlaylists=[
+  {id:'PLRteMtxF9z8tMEeHJfPUeLawesyFHrsGx',video:'6gXoNuGVOKw'},
+  {id:'PLRteMtxF9z8vXJ8EUPauwNSTk83VABWRl',video:'4UA221f9k2o'},
+  {id:'PLRteMtxF9z8v9cM7XypQyl8jvfC3Fms0t',video:'S-xfrvfsAr4'},
+  {id:'PLRteMtxF9z8u06pcas4OVadcGx0Ga4m9w',video:'CjRx6K5N_-Q'}
+];
+let ytPlayer,radioReady=false,radioWanted=false,station=0;
+function loadStation(index,autoplay=true){station=(index+radioPlaylists.length)%radioPlaylists.length;const channel=radioPlaylists[station];$('radio-station').textContent=`CH ${station+1}`;$('radio-status').textContent=`PLAYLIST ${station+1} / 4`;if(!radioReady)return;ytPlayer.loadPlaylist({list:channel.id,listType:'playlist',index:0,startSeconds:0});ytPlayer.setShuffle(true);if(!autoplay)ytPlayer.pauseVideo()}
+window.onYouTubeIframeAPIReady=()=>{
+  const channel=radioPlaylists[station];
+  ytPlayer=new YT.Player('youtube-player',{width:240,height:135,videoId:channel.video,playerVars:{listType:'playlist',list:channel.id,playsinline:1,controls:0,rel:0,modestbranding:1},events:{
+    onReady:()=>{radioReady=true;ytPlayer.setVolume(+$('radio-volume').value);ytPlayer.setShuffle(true);$('radio-status').textContent='RADIO READY';if(radioWanted)ytPlayer.playVideo()},
+    onStateChange:e=>{if(e.data===YT.PlayerState.PLAYING){$('radio-toggle').textContent='Ⅱ';$('radio-status').textContent=`CH ${station+1} · ON AIR`}else if(e.data===YT.PlayerState.PAUSED){$('radio-toggle').textContent='▶';$('radio-status').textContent='PAUSED'}else if(e.data===YT.PlayerState.ENDED){loadStation(station+1,true)}},
+    onError:()=>{$('radio-status').textContent='TRACK UNAVAILABLE';setTimeout(()=>ytPlayer?.nextVideo(),800)}
+  }});
+};
+const ytApi=document.createElement('script');ytApi.src='https://www.youtube.com/iframe_api';document.head.appendChild(ytApi);
+function startRadio(){radioWanted=true;if(radioReady)ytPlayer.playVideo()}
+$('radio-toggle').addEventListener('click',()=>{if(!radioReady)return;const playing=ytPlayer.getPlayerState()===YT.PlayerState.PLAYING;radioWanted=!playing;playing?ytPlayer.pauseVideo():ytPlayer.playVideo()});
+$('radio-prev').addEventListener('click',()=>ytPlayer?.previousVideo());
+$('radio-next').addEventListener('click',()=>ytPlayer?.nextVideo());
+$('radio-station').addEventListener('click',()=>loadStation(station+1,true));
+$('radio-volume').addEventListener('input',e=>ytPlayer?.setVolume(+e.target.value));
+
 function update(dt){
   const active=state==='playing'; if(active){elapsed=(performance.now()-startTime)/1000;const newLevel=Math.floor(elapsed/120)+1;if(newLevel!==level){level=newLevel;speak(`Sector ${String(level).padStart(2,'0')}. They're getting faster.`)}ui.time.textContent=formatTime(elapsed);ui.phase.textContent=`SECTOR ${String(level).padStart(2,'0')}`;
     nextSpawn-=dt;if(nextSpawn<=0){makeDrone();nextSpawn=Math.max(.42,2.5-level*.23+Math.random()*1.5)}
@@ -105,7 +130,7 @@ function update(dt){
 }
 function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.05);update(dt);renderer.render(scene,camera)}
 
-$('start-button').addEventListener('click',()=>{initAudio();startGame()});$('restart-button').addEventListener('click',startGame);$('resume-button').addEventListener('click',resume);
+$('start-button').addEventListener('click',()=>{initAudio();startRadio();startGame()});$('restart-button').addEventListener('click',()=>{startRadio();startGame()});$('resume-button').addEventListener('click',resume);
 renderer.domElement.addEventListener('mousedown',e=>{if(e.button===0)shoot()});
 addEventListener('mousemove',e=>{if(state!=='playing'||document.pointerLockElement!==renderer.domElement)return;targetYaw-=e.movementX*.00165;targetPitch-=e.movementY*.00165;targetYaw=THREE.MathUtils.clamp(targetYaw,-1.35,1.35);targetPitch=THREE.MathUtils.clamp(targetPitch,-.85,.72)});
 addEventListener('keydown',e=>{if(e.code==='KeyR')reload();if(e.code==='Escape'&&state==='playing')pauseGame()});
