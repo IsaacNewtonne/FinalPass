@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0b0f0d" />
+    <meta name="description" content="Final Pass — defend a moving pickup from incoming drones." />
+    <title>Final Pass</title>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+    <link rel="stylesheet" href="./styles.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="game" aria-label="Final Pass game canvas"></div>
+
+    <div id="vignette"></div>
+    <div id="damage-flash"></div>
+
+    <header id="hud" class="hidden">
+      <div class="hud-block mission">
+        <span class="eyebrow">FINAL PASS</span>
+        <strong id="time">00:00</strong>
+        <span id="phase">SECTOR 01</span>
+      </div>
+      <div class="hud-block score-block">
+        <span class="eyebrow">SCORE</span>
+        <strong id="score">000000</strong>
+        <span id="combo">STEADY</span>
+      </div>
+      <div class="hud-block health-block">
+        <span class="eyebrow">TRUCK</span>
+        <div class="bar"><i id="health-bar"></i></div>
+        <span id="health-text">100%</span>
+      </div>
+    </header>
+
+    <div id="crosshair" class="hidden" aria-hidden="true">
+      <i></i><i></i><i></i><i></i><b></b>
+    </div>
+
+    <aside id="ammo" class="hidden">
+      <span id="reload-prompt"></span>
+      <strong id="rounds">30</strong><small>/ 30</small>
+      <span>5.56 MM</span>
+    </aside>
+
+    <div id="warning" class="hidden">
+      <span>⚠ CONTACT</span>
+      <strong id="warning-direction">LEFT SIDE!</strong>
+    </div>
+
+    <div id="subtitle" class="hidden">
+      <b>COLE</b>
+      <span id="subtitle-text">Eyes up. We're entering the pass.</span>
+    </div>
+
+    <section id="menu" class="panel">
+      <div class="title-lockup">
+        <span class="eyebrow">A THREE.JS SURVIVAL GAME</span>
+        <h1>FINAL<br /><em>PASS</em></h1>
+        <p>Ride the last truck out. Keep the sky clear.</p>
+      </div>
+      <div class="briefing">
+        <p><b>MISSION</b> Defend the pickup from incoming kamikaze drones. Every two minutes, the next sector gets faster and more dangerous.</p>
+        <div class="controls">
+          <span><kbd>MOUSE</kbd> AIM</span>
+          <span><kbd>CLICK</kbd> FIRE</span>
+          <span><kbd>R</kbd> RELOAD</span>
+          <span><kbd>ESC</kbd> PAUSE</span>
+        </div>
+        <button id="start-button">START ENGINE <span>›</span></button>
+        <small>Headphones recommended · Desktop browser</small>
+      </div>
+    </section>
+
+    <section id="pause" class="panel hidden">
+      <div class="center-card">
+        <span class="eyebrow">CONVOY HALTED</span>
+        <h2>PAUSED</h2>
+        <button id="resume-button">RESUME</button>
+      </div>
+    </section>
+
+    <section id="game-over" class="panel hidden">
+      <div class="center-card">
+        <span class="eyebrow">TRUCK DISABLED</span>
+        <h2>THE PASS<br />CLAIMED US</h2>
+        <div class="results">
+          <span>SCORE <b id="final-score">0</b></span>
+          <span>DRONES <b id="final-kills">0</b></span>
+          <span>TIME <b id="final-time">00:00</b></span>
+        </div>
+        <button id="restart-button">TRY AGAIN</button>
+      </div>
+    </section>
+
+    <div id="rotate-message">Rotate your device for the best experience.</div>
+    <script type="module" src="./game.js"></script>
+  </body>
+</html>
