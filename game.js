@@ -1,7 +1,16 @@
 import * as THREE from 'three';
+import RAPIER from 'rapier';
 
 const $ = (id) => document.getElementById(id);
 const ui = Object.fromEntries(['hud','time','phase','score','combo','health-bar','health-text','crosshair','ammo','rounds','reload-prompt','warning','warning-direction','subtitle','subtitle-text','menu','pause','game-over','final-score','final-kills','final-time','damage-flash'].map(id => [id,$(id)]));
+
+// ---------------------------------------------------------------------------
+// Rapier physics world (open-source, Rust/WASM). The compat build ships the
+// WASM inline so there is no extra network fetch.
+// ---------------------------------------------------------------------------
+await RAPIER.init();
+const world = new RAPIER.World({ x: 0, y: -9.82, z: 0 });
+world.timestep = 1 / 60;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xaeb7b6);
@@ -30,25 +39,32 @@ const dirtMap=noiseTexture('#77654c','225,202,160',true);dirtMap.repeat.set(18,5
 const mats={
   road:new THREE.MeshStandardMaterial({map:asphaltMap,color:0x777777,roughness:.98}), dirt:new THREE.MeshStandardMaterial({map:dirtMap,color:0x9b886c,roughness:1}),
   truck:new THREE.MeshStandardMaterial({color:0x374338,roughness:.62,metalness:.38}), dark:new THREE.MeshStandardMaterial({color:0x111412,roughness:.48,metalness:.65}),
-  skin:new THREE.MeshStandardMaterial({color:0x9a7559,roughness:1}), cloth:new THREE.MeshStandardMaterial({color:0x555b42,roughness:1}), drone:new THREE.MeshStandardMaterial({color:0x252827,roughness:.6,metalness:.55})
+  skin:new THREE.MeshStandardMaterial({color:0x9a7559,roughness:1}), cloth:new THREE.MeshStandardMaterial({color:0x555b42,roughness:1}), drone:new THREE.MeshStandardMaterial({color:0x252827,roughness:.6,metalness:.55}),
+  debris:new THREE.MeshStandardMaterial({color:0x2c2e2c,roughness:.7,metalness:.4})
 };
 const box=(w,h,d,mat=mats.truck)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.castShadow=m.receiveShadow=true;return m};
 const cyl=(r,h,mat=mats.dark)=>{const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,12),mat);m.castShadow=true;return m};
 
 // Endless road and sparse terrain props move toward the player.
-const world=new THREE.Group(); scene.add(world);
-const road=box(16,.12,720,mats.road); road.position.set(0,-.05,-310);road.receiveShadow=true;world.add(road);
-const ground=box(220,.2,720,mats.dirt);ground.position.set(0,-.18,-310);ground.receiveShadow=true;world.add(ground);
+const worldGroup=new THREE.Group(); scene.add(worldGroup);
+const road=box(16,.12,720,mats.road); road.position.set(0,-.05,-310);road.receiveShadow=true;worldGroup.add(road);
+const ground=box(220,.2,720,mats.dirt);ground.position.set(0,-.18,-310);ground.receiveShadow=true;worldGroup.add(ground);
 const edgeMat=new THREE.MeshStandardMaterial({color:0xc3b58b,roughness:1});
-for(const x of [-8,8]){const line=box(.16,.025,720,edgeMat);line.position.set(x,.03,-310);world.add(line)}
+for(const x of [-8,8]){const line=box(.16,.025,720,edgeMat);line.position.set(x,.03,-310);worldGroup.add(line)}
 const laneMat=new THREE.MeshBasicMaterial({color:0xd6c69b});
-const laneMarks=[]; for(let z=-650;z<30;z+=12){const m=box(.15,.025,4,laneMat);m.position.set(0,.04,z);world.add(m);laneMarks.push(m)}
+const laneMarks=[]; for(let z=-650;z<30;z+=12){const m=box(.15,.025,4,laneMat);m.position.set(0,.04,z);worldGroup.add(m);laneMarks.push(m)}
 const props=[];
-function makeProp(z,side){const g=new THREE.Group(); const rock=new THREE.Mesh(new THREE.DodecahedronGeometry(1+Math.random()*2,1),new THREE.MeshStandardMaterial({color:new THREE.Color().setHSL(.08,.13,.28+Math.random()*.12),roughness:1}));rock.scale.set(1+Math.random()*1.4,.45+Math.random()*.65,1+Math.random());rock.castShadow=true;g.add(rock);if(Math.random()>.65){const scrub=new THREE.Mesh(new THREE.IcosahedronGeometry(.7+Math.random()*.5,1),new THREE.MeshStandardMaterial({color:0x4c5034,roughness:1}));scrub.position.set(1,.3,.4);scrub.scale.y=.55;g.add(scrub)}g.position.set(side*(12+Math.random()*65),.2,z);g.rotation.y=Math.random()*6;world.add(g);props.push(g)}
+function makeProp(z,side){const g=new THREE.Group(); const rock=new THREE.Mesh(new THREE.DodecahedronGeometry(1+Math.random()*2,1),new THREE.MeshStandardMaterial({color:new THREE.Color().setHSL(.08,.13,.28+Math.random()*.12),roughness:1}));rock.scale.set(1+Math.random()*1.4,.45+Math.random()*.65,1+Math.random());rock.castShadow=true;g.add(rock);if(Math.random()>.65){const scrub=new THREE.Mesh(new THREE.IcosahedronGeometry(.7+Math.random()*.5,1),new THREE.MeshStandardMaterial({color:0x4c5034,roughness:1}));scrub.position.set(1,.3,.4);scrub.scale.y=.55;g.add(scrub)}g.position.set(side*(12+Math.random()*65),.2,z);g.rotation.y=Math.random()*6;worldGroup.add(g);props.push(g)}
 for(let z=-650;z<30;z+=8) if(Math.random()>.35) makeProp(z,Math.random()>.5?1:-1);
 
 // Layered mountain silhouettes add scale and parallax to the pass.
-const mountains=[];for(let i=0;i<28;i++){const radius=18+Math.random()*28,height=22+Math.random()*50;const geo=new THREE.IcosahedronGeometry(1,2),pos=geo.attributes.position;for(let n=0;n<pos.count;n++){const x=pos.getX(n),y=pos.getY(n),z=pos.getZ(n),j=1+(Math.sin(n*12.73+i)*.11);pos.setXYZ(n,x*j,y*(1+Math.max(0,y)*.4)*j,z*j)}geo.computeVertexNormals();const m=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:new THREE.Color().setHSL(.075,.1,.25+Math.random()*.1),roughness:1,flatShading:true}));m.scale.set(radius*1.8,height,radius);m.position.set((Math.random()>.5?1:-1)*(45+Math.random()*120),-height*.34,-90-Math.random()*470);m.rotation.y=Math.random()*Math.PI;m.receiveShadow=true;world.add(m);mountains.push(m)}
+const mountains=[];for(let i=0;i<28;i++){const radius=18+Math.random()*28,height=22+Math.random()*50;const geo=new THREE.IcosahedronGeometry(1,2),pos=geo.attributes.position;for(let n=0;n<pos.count;n++){const x=pos.getX(n),y=pos.getY(n),z=pos.getZ(n),j=1+(Math.sin(n*12.73+i)*.11);pos.setXYZ(n,x*j,y*(1+Math.max(0,y)*.4)*j,z*j)}geo.computeVertexNormals();const m=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:new THREE.Color().setHSL(.075,.1,.25+Math.random()*.1),roughness:1,flatShading:true}));m.scale.set(radius*1.8,height,radius);m.position.set((Math.random()>.5?1:-1)*(45+Math.random()*120),-height*.34,-90-Math.random()*470);m.rotation.y=Math.random()*Math.PI;m.receiveShadow=true;worldGroup.add(m);mountains.push(m)}
+
+// ---------------------------------------------------------------------------
+// Real physics floor that debris and wreckage collide with.
+// ---------------------------------------------------------------------------
+const groundBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(0,-0.18,0));
+world.createCollider(RAPIER.ColliderDesc.cuboid(110,0.1,360), groundBody);
 
 // Pickup bed establishes the first-person moving vehicle viewpoint.
 const truck=new THREE.Group();scene.add(truck);
@@ -61,6 +77,10 @@ const windowMat=new THREE.MeshStandardMaterial({color:0x172426,roughness:.12,met
 for(const x of [-1.78,1.78]){const wheel=cyl(.67,.42,new THREE.MeshStandardMaterial({color:0x0c0d0c,roughness:1}));wheel.rotation.z=Math.PI/2;wheel.position.set(x,.68,4.7);truck.add(wheel)}
 const bumper=box(4.8,.22,.32,mats.dark);bumper.position.set(0,.72,-1.48);truck.add(bumper);
 
+// Physics proxy for the truck so debris bounces off it realistically.
+const truckBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(0,1.0,1.25));
+world.createCollider(RAPIER.ColliderDesc.cuboid(2.4,1.0,2.6), truckBody);
+
 function makeSoldier(){const g=new THREE.Group();const vest=new THREE.MeshStandardMaterial({color:0x353b2e,roughness:.9});const torso=box(.72,.9,.46,mats.cloth);torso.position.y=1.18;g.add(torso);const armor=box(.78,.68,.12,vest);armor.position.set(0,1.2,-.28);g.add(armor);const head=new THREE.Mesh(new THREE.SphereGeometry(.27,20,16),mats.skin);head.scale.set(.9,1.08,.92);head.position.y=1.88;head.castShadow=true;g.add(head);const helmet=new THREE.Mesh(new THREE.SphereGeometry(.32,20,10,0,Math.PI*2,0,Math.PI*.58),mats.dark);helmet.position.y=1.98;g.add(helmet);const goggles=box(.4,.1,.05,windowMat);goggles.position.set(0,1.91,-.25);g.add(goggles);for(const x of [-.48,.48]){const arm=cyl(.115,.78,mats.cloth);arm.position.set(x,1.23,-.1);arm.rotation.z=x>0?-.32:.32;arm.rotation.x=-.28;g.add(arm)}for(const x of [-.25,.25]){const leg=cyl(.15,.9,mats.cloth);leg.position.set(x,.46,.12);leg.rotation.x=-.35;g.add(leg)}const weapon=box(.1,.12,1.2,mats.dark);weapon.position.set(.28,1.28,-.52);weapon.rotation.x=-.32;g.add(weapon);return g}
 const mate=makeSoldier();mate.position.set(-1.42,.7,-.35);mate.rotation.y=-.08;truck.add(mate);
 
@@ -70,27 +90,67 @@ const receiver=box(.25,.24,1.35,mats.dark);rifle.add(receiver);const rail=box(.1
 const muzzle=new THREE.PointLight(0xffaa44,0,5);muzzle.position.set(0,0,-1.9);rifle.add(muzzle);
 
 let state='menu', startTime=0, elapsed=0, score=0, kills=0, health=100, ammo=30, reloading=false, lastShot=0, nextSpawn=0, level=1, combo=0, shake=0;
-let yaw=0,pitch=0,targetYaw=0,targetPitch=0; const drones=[],particles=[]; const raycaster=new THREE.Raycaster(); const clock=new THREE.Clock();
+let yaw=0,pitch=0,targetYaw=0,targetPitch=0; const drones=[],particles=[],fragments=[]; const raycaster=new THREE.Raycaster(); const clock=new THREE.Clock();
 const truckTarget=new THREE.Vector3(0,1.35,1.15);
 
+// ---------------------------------------------------------------------------
+// Drones are now real rigid bodies: they fly under thrust, wobble from torque,
+// tumble when shot, and collide with the truck using the physics solver.
+// ---------------------------------------------------------------------------
 function makeDrone(){
   const g=new THREE.Group();g.userData={hp:level>=4?2:1,speed:10+level*1.8+Math.random()*4,wobble:Math.random()*6.28,hit:false};
   const body=new THREE.Mesh(new THREE.CapsuleGeometry(.17,.65,4,8),mats.drone);body.rotation.x=Math.PI/2;body.castShadow=true;g.add(body);
   g.userData.rotors=[];
   for(const x of [-.62,.62])for(const z of [-.4,.4]){const arm=box(.75,.045,.06,mats.drone);arm.position.set(x/2,0,z);arm.rotation.y=x*z>0?.45:-.45;g.add(arm);const rotor=new THREE.Mesh(new THREE.CylinderGeometry(.29,.29,.018,18),new THREE.MeshStandardMaterial({color:0x090a09,roughness:.35,metalness:.75,transparent:true,opacity:.78}));rotor.position.set(x,0,z);g.add(rotor);g.userData.rotors.push(rotor)}
   const led=new THREE.PointLight(0xff2600,2.2,3);led.position.z=.42;g.add(led);
-  const angle=(Math.random()-.5)*2.2, dist=75+Math.random()*45;g.position.set(Math.sin(angle)*dist,7+Math.random()*22,-35-Math.abs(Math.cos(angle))*dist);g.lookAt(truckTarget);scene.add(g);drones.push(g);
+  const angle=(Math.random()-.5)*2.2, dist=75+Math.random()*45;
+  const px=Math.sin(angle)*dist, py=7+Math.random()*22, pz=-35-Math.abs(Math.cos(angle))*dist;
+  g.position.set(px,py,pz);scene.add(g);
+
+  const bodyDesc=RAPIER.RigidBodyDesc.dynamic()
+    .setTranslation(px,py,pz)
+    .setLinearDamping(0.35).setAngularDamping(1.2)
+    .setGravityScale(0.15);
+  const rb=world.createRigidBody(bodyDesc);
+  world.createCollider(RAPIER.ColliderDesc.capsule(0.32,0.17).setDensity(0.6).setRestitution(0.2).setFriction(0.4), rb);
+  g.userData.body=rb;
+  drones.push(g);
   if(drones.length===1 || Math.random()<.34) warnDrone(g);
 }
 function warnDrone(d){const x=d.position.x;ui.warningDirection.textContent=Math.abs(x)<10?'FRONT!':x<0?'LEFT SIDE!':'RIGHT SIDE!';ui.warning.classList.remove('hidden');speak(Math.abs(x)<10?'Drone, front!':x<0?'Contact, left side!':'Drone on the right!');setTimeout(()=>ui.warning.classList.add('hidden'),1300)}
 function speak(text){ui.subtitleText.textContent=text;ui.subtitle.classList.remove('hidden');clearTimeout(speak.t);speak.t=setTimeout(()=>ui.subtitle.classList.add('hidden'),2200)}
-function burst(pos,color=0xff8b32,count=12){for(let i=0;i<count;i++){const m=new THREE.Mesh(new THREE.SphereGeometry(.035+Math.random()*.06,5,4),new THREE.MeshBasicMaterial({color}));m.position.copy(pos);m.userData.vel=new THREE.Vector3((Math.random()-.5)*5,(Math.random()-.2)*5,(Math.random()-.5)*5);m.userData.life=.5+Math.random()*.5;scene.add(m);particles.push(m)}}
+
+// ---------------------------------------------------------------------------
+// Physics-driven debris: real fragments with mass, restitution and gravity
+// that bounce off the road and truck instead of fake scripted particles.
+// ---------------------------------------------------------------------------
+function burst(pos,color=0xff8b32,count=12){
+  for(let i=0;i<count;i++){
+    const r=.04+Math.random()*.06;
+    const m=new THREE.Mesh(new THREE.IcosahedronGeometry(r,0),mats.debris);
+    m.position.copy(pos);m.castShadow=true;scene.add(m);
+    const rb=world.createRigidBody(RAPIER.RigidBodyDesc.dynamic()
+      .setTranslation(pos.x,pos.y,pos.z)
+      .setLinvel((Math.random()-.5)*6,(Math.random()-.2)*6,(Math.random()-.5)*6)
+      .setAngvel({x:(Math.random()-.5)*10,y:(Math.random()-.5)*10,z:(Math.random()-.5)*10})
+      .setGravityScale(1));
+    world.createCollider(RAPIER.ColliderDesc.ball(r).setDensity(1.2).setRestitution(0.45).setFriction(0.6), rb);
+    m.userData.body=rb;m.userData.life=.9+Math.random()*.6;fragments.push(m);
+  }
+}
 
 function shoot(){if(state!=='playing'||reloading)return;const now=performance.now();if(now-lastShot<105)return;lastShot=now;if(ammo<=0){reload();return}ammo--;ui.rounds.textContent=ammo;shake=.035;muzzle.intensity=8;setTimeout(()=>muzzle.intensity=0,45);rifle.position.z=-.69;setTimeout(()=>rifle.position.z=-.78,55);audioShot();
   raycaster.setFromCamera(new THREE.Vector2(0,0),camera);const hits=raycaster.intersectObjects(drones,true);if(hits.length){let d=hits[0].object;while(d.parent&&!drones.includes(d))d=d.parent;if(drones.includes(d)){d.userData.hp--;burst(hits[0].point,0xffcc66,5);if(d.userData.hp<=0)destroyDrone(d)}}
   if(ammo===0)ui.reloadPrompt.textContent='R — RELOAD';
 }
-function destroyDrone(d){const i=drones.indexOf(d);if(i<0)return;drones.splice(i,1);scene.remove(d);burst(d.position,0xff6a1a,24);combo++;kills++;score+=100*level+Math.min(combo,10)*20;updateHUD();audioBoom()}
+function destroyDrone(d){const i=drones.indexOf(d);if(i<0)return;
+  // Convert the drone into a real explosion: knock the body outward, spawn debris.
+  const rb=d.userData.body;
+  if(rb){const v=rb.linvel();rb.setLinvel({x:v.x*0.4+(Math.random()-.5)*4,y:v.y+3,z:v.z*0.4+(Math.random()-.5)*4},true);rb.applyTorqueImpulse({x:(Math.random()-.5)*2,y:(Math.random()-.5)*2,z:(Math.random()-.5)*2},true);}
+  burst(d.position,0xff6a1a,24);combo++;kills++;score+=100*level+Math.min(combo,10)*20;updateHUD();audioBoom();
+  // Remove the drone body shortly after so it falls away as wreckage.
+  setTimeout(()=>{const j=drones.indexOf(d);if(j>=0){drones.splice(j,1);if(d.userData.body)world.removeRigidBody(d.userData.body);scene.remove(d)}},600);
+}
 function reload(){if(reloading||ammo===30||state!=='playing')return;reloading=true;ui.reloadPrompt.textContent='RELOADING…';setTimeout(()=>{if(state==='playing'){ammo=30;ui.rounds.textContent=ammo;ui.reloadPrompt.textContent='';reloading=false}},1450)}
 function damage(){health=Math.max(0,health-(17+level*2));combo=0;shake=.3;ui.damageFlash.style.opacity=.9;setTimeout(()=>ui.damageFlash.style.opacity=0,160);updateHUD();audioBoom();speak(health>0?'Impact! Keep firing!':'We lost the truck!');if(health<=0)endGame()}
 
@@ -98,7 +158,7 @@ function updateHUD(){ui.score.textContent=String(score).padStart(6,'0');ui.combo
 function formatTime(t){const m=Math.floor(t/60),s=Math.floor(t%60);return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`}
 function setPlayUI(on){['hud','crosshair','ammo'].forEach(k=>ui[k].classList.toggle('hidden',!on))}
 function requestAim(){renderer.domElement.focus();if(document.pointerLockElement!==renderer.domElement)renderer.domElement.requestPointerLock?.()}
-function startGame(){drones.splice(0).forEach(d=>scene.remove(d));particles.splice(0).forEach(p=>scene.remove(p));state='playing';score=kills=elapsed=combo=0;health=100;ammo=30;level=1;reloading=false;yaw=pitch=targetYaw=targetPitch=0;startTime=performance.now();nextSpawn=.8;ui.menu.classList.add('hidden');ui['game-over'].classList.add('hidden');ui.pause.classList.add('hidden');setPlayUI(true);ui.rounds.textContent=ammo;ui.reloadPrompt.textContent='';updateHUD();speak("Reverse is engaged. Watch the road behind us.");requestAim()}
+function startGame(){drones.splice(0).forEach(d=>{if(d.userData.body)world.removeRigidBody(d.userData.body);scene.remove(d)});fragments.splice(0).forEach(f=>{if(f.userData.body)world.removeRigidBody(f.userData.body);scene.remove(f)});state='playing';score=kills=elapsed=combo=0;health=100;ammo=30;level=1;reloading=false;yaw=pitch=targetYaw=targetPitch=0;startTime=performance.now();nextSpawn=.8;ui.menu.classList.add('hidden');ui['game-over'].classList.add('hidden');ui.pause.classList.add('hidden');setPlayUI(true);ui.rounds.textContent=ammo;ui.reloadPrompt.textContent='';updateHUD();speak("Reverse is engaged. Watch the road behind us.");requestAim()}
 function endGame(){state='over';document.exitPointerLock?.();setPlayUI(false);ui['game-over'].classList.remove('hidden');ui.finalScore.textContent=score;ui.finalKills.textContent=kills;ui.finalTime.textContent=formatTime(elapsed)}
 function pauseGame(){if(state!=='playing')return;state='paused';document.exitPointerLock?.();ui.pause.classList.remove('hidden');setPlayUI(false)}
 function resume(){if(state!=='paused')return;state='playing';startTime=performance.now()-elapsed*1000;ui.pause.classList.add('hidden');setPlayUI(true);requestAim()}
@@ -134,14 +194,33 @@ $('radio-station').addEventListener('click',()=>loadStation(station+1,true));
 $('radio-volume').addEventListener('input',e=>ytPlayer?.setVolume(+e.target.value));
 
 function update(dt){
-  const active=state==='playing'; if(active){elapsed=(performance.now()-startTime)/1000;const newLevel=Math.floor(elapsed/120)+1;if(newLevel!==level){level=newLevel;speak(`Sector ${String(level).padStart(2,'0')}. They're getting faster.`)}ui.time.textContent=formatTime(elapsed);ui.phase.textContent=`SECTOR ${String(level).padStart(2,'0')}`;
+  const active=state==='playing';
+  if(active){
+    elapsed=(performance.now()-startTime)/1000;const newLevel=Math.floor(elapsed/120)+1;if(newLevel!==level){level=newLevel;speak(`Sector ${String(level).padStart(2,'0')}. They're getting faster.`)}ui.time.textContent=formatTime(elapsed);ui.phase.textContent=`SECTOR ${String(level).padStart(2,'0')}`;
     nextSpawn-=dt;if(nextSpawn<=0){makeDrone();nextSpawn=Math.max(.42,2.5-level*.23+Math.random()*1.5)}
     yaw+=(targetYaw-yaw)*Math.min(1,dt*10);pitch+=(targetPitch-pitch)*Math.min(1,dt*10);camera.rotation.set(pitch,yaw,0,'YXZ');
-    for(let i=drones.length-1;i>=0;i--){const d=drones[i];const toTruck=truckTarget.clone().sub(d.position);const dist=toTruck.length();d.position.addScaledVector(toTruck.normalize(),d.userData.speed*dt);d.position.y+=Math.sin(elapsed*8+d.userData.wobble)*dt*.7;d.rotation.z=Math.sin(elapsed*12+d.userData.wobble)*.08;d.userData.rotors.forEach((r,n)=>r.rotation.y+=(n%2?1:-1)*dt*65);d.lookAt(truckTarget);if(dist<2.6){drones.splice(i,1);scene.remove(d);burst(d.position,0xff5b1f,28);damage()}}
+    world.timestep=dt;
+    // Physics step for drones + debris runs below in stepPhysics().
+    for(let i=drones.length-1;i>=0;i--){const d=drones[i];const rb=d.userData.body;if(!rb)continue;
+      // Steer the drone toward the truck with real thrust (force), so behaviour
+      // emerges from physics rather than teleporting along a straight line.
+      const toTruck=truckTarget.clone().sub(d.position);const dist=toTruck.length();
+      if(dist>3){const dir=toTruck.normalize();const thrust=d.userData.speed;rb.applyImpulse({x:dir.x*thrust*dt*0.6,y:dir.y*thrust*dt*0.6+Math.sin(elapsed*2+d.userData.wobble)*dt*0.4,z:dir.z*thrust*dt*0.6},true);}
+      d.userData.rotors.forEach((r,n)=>r.rotation.y+=(n%2?1:-1)*dt*65);
+      if(dist<2.6){drones.splice(i,1);if(rb)world.removeRigidBody(rb);scene.remove(d);burst(d.position,0xff5b1f,28);damage()}
+    }
   }
+  // Step the physics solver and sync meshes.
+  if(state!=='menu') world.step();
+  if(active||state==='over'){
+    for(const d of drones){const rb=d.userData.body;if(rb){const t=rb.translation(),q=rb.rotation();d.position.set(t.x,t.y,t.z);d.quaternion.set(q.x,q.y,q.z,q.w)}}
+  }
+  for(let i=fragments.length-1;i>=0;i--){const f=fragments[i];const rb=f.userData.body;if(rb){const t=rb.translation(),q=rb.rotation();f.position.set(t.x,t.y,t.z);f.quaternion.set(q.x,q.y,q.z,q.w)}
+    f.userData.life-=dt;f.scale.multiplyScalar(0.985);
+    if(f.userData.life<=0||f.position.y<-5){if(rb)world.removeRigidBody(rb);scene.remove(f);fragments.splice(i,1)}}
+
   // The pickup is reversing toward the open road, so scenery travels toward the cab (+Z).
   const roadSpeed=active?18+level*.7:5;asphaltMap.offset.y=(asphaltMap.offset.y-roadSpeed*dt*.009)%1;dirtMap.offset.y=(dirtMap.offset.y-roadSpeed*dt*.004)%1;for(const m of laneMarks){m.position.z+=roadSpeed*dt;if(m.position.z>28)m.position.z-=684}for(const p of props){p.position.z+=roadSpeed*dt;if(p.position.z>35){p.position.z-=690;p.position.x=(Math.random()>.5?1:-1)*(12+Math.random()*65)}}for(const m of mountains){m.position.z+=roadSpeed*dt*.1;if(m.position.z>30)m.position.z-=560}
-  for(let i=particles.length-1;i>=0;i--){const p=particles[i];p.userData.life-=dt;p.position.addScaledVector(p.userData.vel,dt);p.userData.vel.y-=6*dt;p.scale.multiplyScalar(.96);if(p.userData.life<=0){scene.remove(p);particles.splice(i,1)}}
   const bump=Math.sin(performance.now()*.012)*.012+(Math.random()-.5)*shake;camera.position.set(0,2.62+bump,1.7);truck.rotation.z=Math.sin(performance.now()*.003)*.004;truck.rotation.x=Math.sin(performance.now()*.0053)*.0025;mate.rotation.z=Math.sin(performance.now()*.006)*.012;shake*=.87;
 }
 function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.05);update(dt);renderer.render(scene,camera)}
