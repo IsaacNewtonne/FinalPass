@@ -32,7 +32,7 @@ The pressure increases every two minutes. Drones become faster, tougher, and mor
 - **Directional teammate warnings** for threats approaching from the left, right, or front
 - **Procedural roadside environment** with an endless moving road, terrain props, lighting, fog, and vehicle movement
 - **Reactive combat feedback** including explosions, damage effects, camera shake, health, combos, and scoring
-- **Four-channel in-game radio** powered by Hip Hop Circuit YouTube playlists
+- **Three-channel shuffled in-game radio** powered by Hip Hop Circuit YouTube playlists
 - **Cinematic interface** with mission briefing, HUD, pause screen, and post-run statistics
 - **Static deployment** with no database, backend, bundler, or build pipeline required
 
@@ -111,7 +111,7 @@ Because every asset path is relative, the game works from a GitHub Pages project
 
 ## Music and External Services
 
-The radio streams four playlists from [Hip Hop Circuit](https://www.youtube.com/@Hip_Hop_Circuit) using the YouTube IFrame Player API. Playback begins only after the player interacts with the start screen, in line with browser autoplay restrictions.
+The radio randomly selects and shuffles one of three playlists from [Hip Hop Circuit](https://www.youtube.com/@Hip_Hop_Circuit) whenever the game opens. Playback begins only after the player interacts with the start screen, in line with browser autoplay restrictions.
 
 Music availability, advertisements, regional restrictions, and playback behavior are controlled by YouTube and the respective rights holders. An internet connection is required for Three.js, web fonts, and radio playback.
 
