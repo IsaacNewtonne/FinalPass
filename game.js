@@ -207,7 +207,7 @@ function updateHUD(){ui.score.textContent=String(score).padStart(6,'0');ui.combo
 function formatTime(t){const m=Math.floor(t/60),s=Math.floor(t%60);return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`}
 function setPlayUI(on){['hud','crosshair','ammo'].forEach(k=>ui[k].classList.toggle('hidden',!on))}
 function requestAim(){renderer.domElement.focus();if(document.pointerLockElement!==renderer.domElement)renderer.domElement.requestPointerLock?.()}
-function startGame(){drones.splice(0).forEach(d=>{if(d.userData.body)world.removeRigidBody(d.userData.body);scene.remove(d)});fragments.splice(0).forEach(f=>{if(f.userData.body)world.removeRigidBody(f.userData.body);scene.remove(f)});state='playing';score=kills=elapsed=combo=0;health=100;ammo=30;level=1;reloading=false;yaw=pitch=targetYaw=targetPitch=0;startTime=performance.now();nextSpawn=.8;ui.menu.classList.add('hidden');ui['game-over'].classList.add('hidden');ui.pause.classList.add('hidden');setPlayUI(true);ui.rounds.textContent=ammo;ui.reloadPrompt.textContent='';updateHUD();speak("Reverse is engaged. Watch the road behind us.");requestAim()}
+function startGame(){drones.splice(0).forEach(d=>{if(d.userData.body)world.removeRigidBody(d.userData.body);scene.remove(d)});fragments.splice(0).forEach(f=>{if(f.userData.body)world.removeRigidBody(f.userData.body);scene.remove(f)});state='playing';score=kills=elapsed=combo=0;health=100;ammo=30;level=1;reloading=false;yaw=pitch=targetYaw=targetPitch=0;startTime=performance.now();nextSpawn=.8;ui.menu.classList.add('hidden');ui['game-over'].classList.add('hidden');ui.pause.classList.add('hidden');setPlayUI(true);ui.rounds.textContent=ammo;ui.reloadPrompt.textContent='';updateHUD();speak("We're moving. Watch our six.");requestAim()}
 function endGame(){state='over';document.exitPointerLock?.();setPlayUI(false);ui['game-over'].classList.remove('hidden');ui.finalScore.textContent=score;ui.finalKills.textContent=kills;ui.finalTime.textContent=formatTime(elapsed)}
 function pauseGame(){if(state!=='playing')return;state='paused';document.exitPointerLock?.();ui.pause.classList.remove('hidden');setPlayUI(false)}
 function resume(){if(state!=='paused')return;state='playing';startTime=performance.now()-elapsed*1000;ui.pause.classList.add('hidden');setPlayUI(true);requestAim()}
@@ -268,9 +268,10 @@ function update(dt){
     f.userData.life-=dt;f.scale.multiplyScalar(0.985);
     if(f.userData.life<=0||f.position.y<-5){if(rb)world.removeRigidBody(rb);scene.remove(f);fragments.splice(i,1)}}
 
-  // The pickup is reversing toward the open road, so scenery travels toward the cab (+Z).
-  const roadSpeed=active?18+level*.7:5;asphaltMap.offset.y=(asphaltMap.offset.y-roadSpeed*dt*.009)%1;dirtMap.offset.y=(dirtMap.offset.y-roadSpeed*dt*.004)%1;for(const m of laneMarks){m.position.z+=roadSpeed*dt;if(m.position.z>28)m.position.z-=684}for(const p of props){p.position.z+=roadSpeed*dt;if(p.position.z>35){p.position.z-=690;p.position.x=(Math.random()>.5?1:-1)*(12+Math.random()*65)}}for(const m of mountains){m.position.z+=roadSpeed*dt*.1;if(m.position.z>30)m.position.z-=560}
-  const dustAttribute=dust.geometry.attributes.position;for(let i=0;i<dustCount;i++){let z=dustAttribute.getZ(i)+roadSpeed*dt*(.7+((i%7)/20));if(z>18)z=-38;dustAttribute.setZ(i,z)}dustAttribute.needsUpdate=true;
+  // The pickup drives forward (+Z) while the riders face backward out of the bed.
+  // Scenery therefore recedes toward the rear horizon (-Z).
+  const roadSpeed=active?18+level*.7:5;asphaltMap.offset.y=(asphaltMap.offset.y+roadSpeed*dt*.009)%1;dirtMap.offset.y=(dirtMap.offset.y+roadSpeed*dt*.004)%1;for(const m of laneMarks){m.position.z-=roadSpeed*dt;if(m.position.z<-656)m.position.z+=684}for(const p of props){p.position.z-=roadSpeed*dt;if(p.position.z<-655){p.position.z+=690;p.position.x=(Math.random()>.5?1:-1)*(12+Math.random()*65)}}for(const m of mountains){m.position.z-=roadSpeed*dt*.1;if(m.position.z<-650)m.position.z+=560}
+  const dustAttribute=dust.geometry.attributes.position;for(let i=0;i<dustCount;i++){let z=dustAttribute.getZ(i)-roadSpeed*dt*(.7+((i%7)/20));if(z<-38)z=18;dustAttribute.setZ(i,z)}dustAttribute.needsUpdate=true;
   const now=performance.now(),suspension=Math.sin(now*.013)*.009+Math.sin(now*.0047)*.014,bump=suspension+(Math.random()-.5)*shake;
   camera.position.set(0,2.62+bump,1.7);truck.rotation.z=Math.sin(now*.003)*.006;truck.rotation.x=Math.sin(now*.0053)*.004;
   mate.rotation.z=Math.sin(now*.006)*.018-truck.rotation.z*.7;mate.position.y=.72+suspension*.8;
