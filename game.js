@@ -15,6 +15,14 @@ world.timestep = 1 / 60;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xaeb7b6);
 scene.fog = new THREE.FogExp2(0x929995, .0065);
+const weather = {
+  windSpeed: 0,
+  windDirection: 0,
+  fogDensity: 0.0065,
+  targetFog: 0.0065,
+  dustStorm: false,
+  dustStormTimer: 0
+};
 const camera = new THREE.PerspectiveCamera(68, innerWidth/innerHeight, .1, 700);
 camera.position.set(0, 2.62, 1.7);
 const renderer = new THREE.WebGLRenderer({antialias:true, powerPreference:'high-performance'});
@@ -69,7 +77,11 @@ const laneMat=new THREE.MeshBasicMaterial({color:0xd6c69b});
 const laneMarks=[]; for(let z=-650;z<30;z+=12){const m=box(.15,.025,4,laneMat);m.position.set(0,.04,z);worldGroup.add(m);laneMarks.push(m)}
 const props=[];
 function makeProp(z,side){const g=new THREE.Group(); const rock=new THREE.Mesh(new THREE.DodecahedronGeometry(1+Math.random()*2,1),new THREE.MeshStandardMaterial({color:new THREE.Color().setHSL(.08,.13,.28+Math.random()*.12),roughness:1}));rock.scale.set(1+Math.random()*1.4,.45+Math.random()*.65,1+Math.random());rock.castShadow=true;g.add(rock);if(Math.random()>.65){const scrub=new THREE.Mesh(new THREE.IcosahedronGeometry(.7+Math.random()*.5,1),new THREE.MeshStandardMaterial({color:0x4c5034,roughness:1}));scrub.position.set(1,.3,.4);scrub.scale.y=.55;g.add(scrub)}g.position.set(side*(12+Math.random()*65),.2,z);g.rotation.y=Math.random()*6;worldGroup.add(g);props.push(g)}
+function makeWreck(z,side){const g=new THREE.Group();const body=box(3.2,.8,7,mats.steel);body.position.y=.4;body.rotation.y=Math.random()*Math.PI;body.castShadow=true;g.add(body);const wheel1=cyl(.45,.25,mats.rubber);wheel1.position.set(-1.3,.2,-2.5);wheel1.rotation.z=Math.PI/2;g.add(wheel1);const wheel2=cyl(.45,.25,mats.rubber);wheel2.position.set(1.3,.2,-2.5);wheel2.rotation.z=Math.PI/2;g.add(wheel2);const wheel3=cyl(.45,.25,mats.rubber);wheel3.position.set(-1.3,.2,2.5);wheel3.rotation.z=Math.PI/2;g.add(wheel3);const wheel4=cyl(.45,.25,mats.rubber);wheel4.position.set(1.3,.2,2.5);wheel4.rotation.z=Math.PI/2;g.add(wheel4);const hatch=new THREE.Mesh(new THREE.ConeGeometry(.6,.8,6),mats.red);hatch.position.set(0,.9,0);hatch.rotation.y=Math.random()*Math.PI;hatch.castShadow=true;g.add(hatch);g.position.set(side*(14+Math.random()*60),.1,z);g.rotation.y=Math.random()*Math.PI;worldGroup.add(g);props.push(g)}
+function makeRoadSign(z,side){const g=new THREE.Group();const post=cyl(.1,2.5,mats.steel);post.position.y=1.25;post.castShadow=true;g.add(post);const sign=box(2,.08,1.2,new THREE.MeshStandardMaterial({color:0x2a5a2a,roughness:0.7}));sign.position.y=2.5;sign.castShadow=true;g.add(sign);const arrow=new THREE.Shape();arrow.moveTo(0,-.3);arrow.lineTo(.5,.1);arrow.lineTo(0,.05);arrow.lineTo(-.5,.1);arrow.lineTo(0,-.3);const arrowGeo=new THREE.ExtrudeGeometry(arrow,{depth:.02,curveSegments:4});const arrowMesh=new THREE.Mesh(arrowGeo,new THREE.MeshBasicMaterial({color:0xffd27a}));arrowMesh.position.set(-.2,2.5,.01);arrowMesh.rotation.y=side>0?Math.PI:0;g.add(arrowMesh);g.position.set(side*(13+Math.random()*55),.1,z);worldGroup.add(g);props.push(g)}
 for(let z=-650;z<30;z+=8) if(Math.random()>.35) makeProp(z,Math.random()>.5?1:-1);
+for(let z=-600;z<0;z+=45) if(Math.random()>.7) makeWreck(z,Math.random()>.5?1:-1);
+for(let z=-550;z<0;z+=60) if(Math.random()>.65) makeRoadSign(z,Math.random()>.5?1:-1);
 
 // Layered mountain silhouettes add scale and parallax to the pass.
 const mountains=[];for(let i=0;i<28;i++){const radius=18+Math.random()*28,height=22+Math.random()*50;const geo=new THREE.IcosahedronGeometry(1,2),pos=geo.attributes.position;for(let n=0;n<pos.count;n++){const x=pos.getX(n),y=pos.getY(n),z=pos.getZ(n),j=1+(Math.sin(n*12.73+i)*.11);pos.setXYZ(n,x*j,y*(1+Math.max(0,y)*.4)*j,z*j)}geo.computeVertexNormals();const m=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:new THREE.Color().setHSL(.075,.1,.25+Math.random()*.1),roughness:1,flatShading:true}));m.scale.set(radius*1.8,height,radius);m.position.set((Math.random()>.5?1:-1)*(45+Math.random()*120),-height*.34,-90-Math.random()*470);m.rotation.y=Math.random()*Math.PI;m.receiveShadow=true;worldGroup.add(m);mountains.push(m)}
@@ -130,12 +142,22 @@ const receiver=box(.25,.24,1.35,mats.dark);rifle.add(receiver);const rail=box(.1
 const muzzle=new THREE.PointLight(0xffaa44,0,5);muzzle.position.set(0,0,-1.9);rifle.add(muzzle);
 const muzzleSprite=new THREE.Mesh(new THREE.CircleGeometry(.12,8),new THREE.MeshBasicMaterial({color:0xffd27a,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false}));
 muzzleSprite.position.set(0,0,-1.91);rifle.add(muzzleSprite);
+const shellGeometry=new THREE.CylinderGeometry(.02,.018,.06,8);
+const shellMaterial=new THREE.MeshStandardMaterial({color:0xb8860b,roughness:0.3,metalness:0.8});
+const casings=[];
 
 // Dust motes near the vehicle make speed legible without expensive volumetrics.
 const dustCount=220,dustPositions=new Float32Array(dustCount*3);
 for(let i=0;i<dustCount;i++){dustPositions[i*3]=(Math.random()-.5)*24;dustPositions[i*3+1]=Math.random()*4;dustPositions[i*3+2]=-38+Math.random()*55}
 const dustGeometry=new THREE.BufferGeometry();dustGeometry.setAttribute('position',new THREE.BufferAttribute(dustPositions,3));
 const dust=new THREE.Points(dustGeometry,new THREE.PointsMaterial({color:0xd8b98a,size:.075,transparent:true,opacity:.38,depthWrite:false,sizeAttenuation:true}));scene.add(dust);
+
+// Smoke particles for truck damage
+const smokeCount=80,smokePositions=new Float32Array(smokeCount*3),smokeColors=new Float32Array(smokeCount*3);
+for(let i=0;i<smokeCount;i++){smokePositions[i*3]=(Math.random()-.5)*3;smokePositions[i*3+1]=Math.random()*2;smokePositions[i*3+2]=-1+Math.random()*2;smokeColors[i*3]=0.4;smokeColors[i*3+1]=0.4;smokeColors[i*3+2]=0.4;}
+const smokeGeometry=new THREE.BufferGeometry();smokeGeometry.setAttribute('position',new THREE.BufferAttribute(smokePositions,3));smokeGeometry.setAttribute('color',new THREE.BufferAttribute(smokeColors,3));
+const smoke=new THREE.Points(smokeGeometry,new THREE.PointsMaterial({size:0.15,vertexColors:true,transparent:true,opacity:0,depthWrite:false,sizeAttenuation:true}));smoke.position.set(0,2.5,1.25);truck.add(smoke);
+const smokeVelocities=[];for(let i=0;i<smokeCount;i++)smokeVelocities.push(new THREE.Vector3((Math.random()-.5)*0.3,Math.random()*0.2+0.1,(Math.random()-.5)*0.3));
 
 let state='menu', startTime=0, elapsed=0, score=0, kills=0, health=100, ammo=30, reloading=false, lastShot=0, nextSpawn=0, level=1, combo=0, shake=0;
 let yaw=0,pitch=0,targetYaw=0,targetPitch=0; const drones=[],particles=[],fragments=[]; const raycaster=new THREE.Raycaster(); const clock=new THREE.Clock();
@@ -146,7 +168,26 @@ const truckTarget=new THREE.Vector3(0,1.35,1.15);
 // tumble when shot, and collide with the truck using the physics solver.
 // ---------------------------------------------------------------------------
 function makeDrone(){
-  const g=new THREE.Group();g.userData={hp:level>=4?2:1,speed:10+level*1.8+Math.random()*4,wobble:Math.random()*6.28,hit:false,velocity:new THREE.Vector3()};
+  const g=new THREE.Group();
+  const behavior = Math.random();
+  let aiType;
+  if(behavior < 0.3) aiType = 'diver';
+  else if(behavior < 0.6) aiType = 'strafe';
+  else if(behavior < 0.8) aiType = 'kamikaze';
+  else aiType = 'patrol';
+  g.userData={
+    hp:level>=4?2:1,
+    speed:10+level*1.8+Math.random()*4,
+    wobble:Math.random()*6.28,
+    hit:false,
+    velocity:new THREE.Vector3(),
+    aiType:aiType,
+    targetPos:new THREE.Vector3(),
+    lastEvasive:0,
+    divePhase:0,
+    formationOffset:new THREE.Vector3((Math.random()-0.5)*4, (Math.random()-0.5)*2, (Math.random()-0.5)*4),
+    maxHealth:level>=4?2:1
+  };
   const body=new THREE.Mesh(new THREE.CapsuleGeometry(.17,.65,4,8),mats.drone);body.rotation.x=Math.PI/2;body.castShadow=true;g.add(body);
   const cameraEye=box(.2,.16,.14,windowMat);cameraEye.position.set(0,-.12,-.38);g.add(cameraEye);
   g.userData.rotors=[];
@@ -188,8 +229,35 @@ function burst(pos,color=0xff8b32,count=12){
   }
 }
 
-function shoot(){if(state!=='playing'||reloading)return;const now=performance.now();if(now-lastShot<105)return;lastShot=now;if(ammo<=0){reload();return}ammo--;ui.rounds.textContent=ammo;shake=.035;muzzle.intensity=8;muzzleSprite.material.opacity=1;muzzleSprite.rotation.z=Math.random()*Math.PI;muzzleSprite.scale.setScalar(.7+Math.random()*.8);setTimeout(()=>{muzzle.intensity=0;muzzleSprite.material.opacity=0},45);rifle.position.z=-.69;rifle.rotation.x=.045;setTimeout(()=>{rifle.position.z=-.78;rifle.rotation.x=-.02},70);audioShot();
-  raycaster.setFromCamera(new THREE.Vector2(0,0),camera);const hits=raycaster.intersectObjects(drones,true);if(hits.length){let d=hits[0].object;while(d.parent&&!drones.includes(d))d=d.parent;if(drones.includes(d)){d.userData.hp--;burst(hits[0].point,0xffcc66,5);if(d.userData.hp<=0)destroyDrone(d)}}
+function shoot(){if(state!=='playing'||reloading)return;const now=performance.now();if(now-lastShot<105)return;lastShot=now;if(ammo<=0){reload();return}ammo--;ui.rounds.textContent=ammo;shake=.045;muzzle.intensity=12;muzzleSprite.material.opacity=1;muzzleSprite.rotation.z=Math.random()*Math.PI;muzzleSprite.scale.setScalar(.8+Math.random()*.9);setTimeout(()=>{muzzle.intensity=0;muzzleSprite.material.opacity=0},50);
+  // Enhanced recoil: camera kick + rifle movement
+  camera.rotation.x-=0.003;
+  rifle.position.z=-.65;rifle.rotation.x=.065;
+  setTimeout(()=>{rifle.position.z=-.78;rifle.rotation.x=-.02},80);
+  // Shell casing ejection
+  const casing=new THREE.Mesh(shellGeometry,shellMaterial);
+  casing.position.set(.18,-.18,-.65);
+  casing.rotation.set(Math.random()*Math.PI,Math.random()*Math.PI,Math.random()*Math.PI);
+  rifle.add(casing);
+  const casingRb=world.createRigidBody(RAPIER.RigidBodyDesc.dynamic()
+    .setTranslation(casing.position.x,casing.position.y,casing.position.z)
+    .setLinvel((Math.random()-.5)*2+1.5,-0.5,(Math.random()-.5)*1)
+    .setAngvel({x:(Math.random()-.5)*5,y:(Math.random()-.5)*5,z:(Math.random()-.5)*5})
+    .setGravityScale(1.5));
+  world.createCollider(RAPIER.ColliderDesc.cylinder(0.03,0.06).setDensity(8).setRestitution(0.3).setFriction(0.5),casingRb);
+  casings.push({mesh:casing,body:casingRb});
+  audioShot();
+  raycaster.setFromCamera(new THREE.Vector2(0,0),camera);const hits=raycaster.intersectObjects(drones,true);if(hits.length){let d=hits[0].object;while(d.parent&&!drones.includes(d))d=d.parent;if(drones.includes(d)){
+    d.userData.hp--;
+    // Trigger evasive maneuver if drone survives
+    if(d.userData.hp>0 && d.userData.aiType==='kamikaze'){
+      d.userData.lastEvasive=performance.now();
+      const rb=d.userData.body;
+      if(rb){rb.applyImpulse({x:(Math.random()-.5)*8,y:(Math.random()-.2)*8,z:(Math.random()-.5)*8},true);}
+    }
+    burst(hits[0].point,0xffcc66,5);
+    if(d.userData.hp<=0)destroyDrone(d)
+  }}
   if(ammo===0)ui.reloadPrompt.textContent='R — RELOAD';
 }
 function destroyDrone(d){const i=drones.indexOf(d);if(i<0)return;
@@ -201,7 +269,12 @@ function destroyDrone(d){const i=drones.indexOf(d);if(i<0)return;
   setTimeout(()=>{const j=drones.indexOf(d);if(j>=0){drones.splice(j,1);if(d.userData.body)world.removeRigidBody(d.userData.body);scene.remove(d)}},600);
 }
 function reload(){if(reloading||ammo===30||state!=='playing')return;reloading=true;ui.reloadPrompt.textContent='RELOADING…';setTimeout(()=>{if(state==='playing'){ammo=30;ui.rounds.textContent=ammo;ui.reloadPrompt.textContent='';reloading=false}},1450)}
-function damage(){health=Math.max(0,health-(17+level*2));combo=0;shake=.3;ui.damageFlash.style.opacity=.9;setTimeout(()=>ui.damageFlash.style.opacity=0,160);updateHUD();audioBoom();speak(health>0?'Impact! Keep firing!':'We lost the truck!');if(health<=0)endGame()}
+function damage(){health=Math.max(0,health-(17+level*2));combo=0;shake=.3;ui.damageFlash.style.opacity=.9;setTimeout(()=>ui.damageFlash.style.opacity=0,160);updateHUD();audioBoom();speak(health>0?'Impact! Keep firing!':'We lost the truck!');
+  // Visual damage effects
+  if(health<50){mats.truck.emissive=new THREE.Color(0x331100);mats.truck.emissiveIntensity=0.2;}
+  if(health<30){scene.fog.color.setHSL(0.08,0.3,0.25);setTimeout(()=>scene.fog.color.setHSL(0.08,0.1,0.35),3000);}
+  if(health<=0)endGame()
+}
 
 function updateHUD(){ui.score.textContent=String(score).padStart(6,'0');ui.combo.textContent=combo>=3?`${combo}× STREAK`:'STEADY';ui.healthBar.style.width=health+'%';ui.healthBar.style.background=health<35?'#ef4b32':'#ffb23e';ui.healthText.textContent=Math.ceil(health)+'%'}
 function formatTime(t){const m=Math.floor(t/60),s=Math.floor(t%60);return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`}
@@ -212,10 +285,15 @@ function endGame(){state='over';document.exitPointerLock?.();setPlayUI(false);ui
 function pauseGame(){if(state!=='playing')return;state='paused';document.exitPointerLock?.();ui.pause.classList.remove('hidden');setPlayUI(false)}
 function resume(){if(state!=='paused')return;state='playing';startTime=performance.now()-elapsed*1000;ui.pause.classList.add('hidden');setPlayUI(true);requestAim()}
 
-let audio,engineAudio;
-function initAudio(){if(audio)return;audio=new (window.AudioContext||window.webkitAudioContext)();const master=audio.createGain(),low=audio.createBiquadFilter();master.gain.value=.045;low.type='lowpass';low.frequency.value=150;const a=audio.createOscillator(),b=audio.createOscillator();a.type='sawtooth';b.type='square';a.frequency.value=42;b.frequency.value=63;a.connect(low);b.connect(low);low.connect(master).connect(audio.destination);a.start();b.start();engineAudio={a,b,master}}
+let audio,engineAudio,windAudio,ambientOsc;
+function initAudio(){if(audio)return;audio=new (window.AudioContext||window.webkitAudioContext)();const master=audio.createGain(),low=audio.createBiquadFilter();master.gain.value=.045;low.type='lowpass';low.frequency.value=150;const a=audio.createOscillator(),b=audio.createOscillator();a.type='sawtooth';b.type='square';a.frequency.value=42;b.frequency.value=63;a.connect(low);b.connect(low);low.connect(master).connect(audio.destination);a.start();b.start();engineAudio={a,b,master};
+  // Ambient wind sound
+  ambientOsc=audio.createOscillator();ambientOsc.type='pink';const windGain=audio.createGain();windGain.gain.value=0.02;ambientOsc.connect(windGain).connect(master);ambientOsc.start();
+  windAudio={osc:ambientOsc,gain:windGain};
+}
 function audioShot(){if(!audio)return;const o=audio.createOscillator(),g=audio.createGain();o.type='sawtooth';o.frequency.setValueAtTime(140,audio.currentTime);o.frequency.exponentialRampToValueAtTime(45,audio.currentTime+.08);g.gain.setValueAtTime(.18,audio.currentTime);g.gain.exponentialRampToValueAtTime(.001,audio.currentTime+.1);o.connect(g).connect(audio.destination);o.start();o.stop(audio.currentTime+.1)}
 function audioBoom(){if(!audio)return;const len=audio.sampleRate*.35,b=audio.createBuffer(1,len,audio.sampleRate),data=b.getChannelData(0);for(let i=0;i<len;i++)data[i]=(Math.random()*2-1)*Math.pow(1-i/len,2);const s=audio.createBufferSource(),g=audio.createGain();s.buffer=b;g.gain.value=.35;s.connect(g).connect(audio.destination);s.start()}
+function audioDroneBuzz(distance){if(!audio)return;const dist=Math.max(1,distance);const vol=Math.min(0.15,1/dist*2);const o=audio.createOscillator(),g=audio.createGain();o.type='square';o.frequency.value=80+Math.random()*40;g.gain.value=vol;o.connect(g).connect(audio.destination);o.start();o.stop(audio.currentTime+0.1+Math.random()*0.1)}
 
 // YouTube-backed in-game radio. Playback begins only after the player's click.
 const radioPlaylists=[
@@ -251,11 +329,95 @@ function update(dt){
     world.timestep=dt;
     // Physics step for drones + debris runs below in stepPhysics().
     for(let i=drones.length-1;i>=0;i--){const d=drones[i];const rb=d.userData.body;if(!rb)continue;
-      // Steer the drone toward the truck with real thrust (force), so behaviour
-      // emerges from physics rather than teleporting along a straight line.
       const toTruck=truckTarget.clone().sub(d.position);const dist=toTruck.length();
-      if(dist>3){const dir=toTruck.normalize();const thrust=d.userData.speed;rb.applyImpulse({x:dir.x*thrust*dt*0.6,y:dir.y*thrust*dt*0.6+Math.sin(elapsed*2+d.userData.wobble)*dt*0.4,z:dir.z*thrust*dt*0.6},true);}
+      const aiType=d.userData.aiType;
+      let thrustDir=new THREE.Vector3();
+      let thrustMult=0.6;
+      switch(aiType){
+        case 'diver':{
+          // Diving attack: climb high then plunge down
+          const diveProgress=d.userData.divePhase;
+          if(dist>40 && diveProgress===0){
+            // Ascend before dive
+            thrustDir.set(0,1,0);
+            thrustMult=0.8;
+          } else if(dist>40 && diveProgress===0 && d.position.y>25){
+            d.userData.divePhase=1;
+          }
+          if(d.userData.divePhase===1){
+            // Dive toward truck
+            const diveDir=toTruck.normalize();
+            thrustDir.add(diveDir);
+            thrustMult=1.2;
+          }
+          if(dist<5){d.userData.divePhase=0;}
+          break;
+        }
+        case 'strafe':{
+          // Strafing run: approach from side, circle, then attack
+          const sideOffset=d.userData.formationOffset.x;
+          const strafeTarget=truckTarget.clone().add(new THREE.Vector3(sideOffset,2,0));
+          const toStrafe=strafeTarget.sub(d.position);
+          if(toStrafe.length()>5){
+            thrustDir=toStrafe.normalize();
+            thrustMult=0.7;
+          } else {
+            thrustDir=toTruck.normalize();
+            thrustMult=0.9;
+          }
+          // Add some lateral movement
+          thrustDir.x+=(Math.sin(elapsed*1.3+d.userData.wobble)*0.3);
+          break;
+        }
+        case 'kamikaze':{
+          // Direct charge with occasional evasion
+          thrustDir=toTruck.normalize();
+          thrustMult=1.1;
+          // Occasionally do evasive maneuver if shot at
+          if(performance.now()-d.userData.lastEvasive<500){
+            thrustDir.x+=Math.sin(performance.now()*0.01)*0.5;
+            thrustDir.y+=Math.cos(performance.now()*0.015)*0.3;
+            thrustMult=0.8;
+          }
+          break;
+        }
+        case 'patrol':{
+          // Patrol pattern with periodic attacks
+          const patrolPoint=truckTarget.clone().add(new THREE.Vector3(
+            Math.sin(elapsed*0.5+d.userData.wobble)*15,
+            Math.cos(elapsed*0.3+d.userData.wobble)*5,
+            0
+          ));
+          const toPatrol=patrolPoint.sub(d.position);
+          if(toPatrol.length()>8){
+            thrustDir=toPatrol.normalize();
+            thrustMult=0.6;
+          } else {
+            thrustDir=toTruck.normalize();
+            thrustMult=0.8;
+          }
+          break;
+        }
+        default:{
+          thrustDir=toTruck.normalize();
+          thrustMult=0.6;
+        }
+      }
+      // Apply thrust with physics
+      if(dist>3){
+        thrustDir.normalize();
+        const thrust=d.userData.speed;
+        const wobbleX=Math.sin(elapsed*2+d.userData.wobble)*dt*0.4;
+        const wobbleY=Math.cos(elapsed*1.7+d.userData.wobble)*dt*0.3;
+        rb.applyImpulse({
+          x:(thrustDir.x*thrust*dt*thrustMult)+wobbleX,
+          y:(thrustDir.y*thrust*dt*thrustMult)+wobbleY+Math.sin(elapsed*2+d.userData.wobble)*dt*0.4,
+          z:(thrustDir.z*thrust*dt*thrustMult)
+        },true);
+      }
       d.userData.rotors.forEach((r,n)=>r.rotation.y+=(n%2?1:-1)*dt*65);
+      // Drone buzzing sound when close
+      if(dist<30 && Math.random()<dt*3)audioDroneBuzz(dist);
       if(dist<2.6){drones.splice(i,1);if(rb)world.removeRigidBody(rb);scene.remove(d);burst(d.position,0xff5b1f,28);damage()}
     }
   }
@@ -268,10 +430,46 @@ function update(dt){
     f.userData.life-=dt;f.scale.multiplyScalar(0.985);
     if(f.userData.life<=0||f.position.y<-5){if(rb)world.removeRigidBody(rb);scene.remove(f);fragments.splice(i,1)}}
 
+  // Update and clean up shell casings
+  for(let i=casings.length-1;i>=0;i--){const c=casings[i];const rb=c.body;if(rb){const t=rb.translation();c.mesh.position.set(t.x,t.y,t.z);const q=rb.rotation();c.mesh.quaternion.set(q.x,q.y,q.z,q.w)}
+    if(c.mesh.position.y<-5||c.mesh.position.z>50){if(rb)world.removeRigidBody(rb);scene.remove(c.mesh);casings.splice(i,1)}
+  }
+
   // The pickup drives forward (+Z) while the riders face backward out of the bed.
   // Scenery therefore recedes toward the rear horizon (-Z).
+  // Dynamic weather: wind affects dust, fog density changes
+  weather.windDirection += (Math.random()-0.5)*0.02;
+  weather.windSpeed = 5 + Math.sin(elapsed*0.05)*3 + Math.cos(elapsed*0.03)*2;
+  // Occasional fog changes
+  if(Math.random()<0.001 && !weather.dustStorm){
+    weather.dustStorm = true;
+    weather.dustStormTimer = 15 + Math.random()*20;
+    weather.targetFog = 0.012;
+  }
+  if(weather.dustStorm){
+    weather.dustStormTimer -= dt;
+    if(weather.dustStormTimer <= 0){
+      weather.dustStorm = false;
+      weather.targetFog = 0.0065;
+    }
+  }
+  scene.fog.density += (weather.targetFog - scene.fog.density) * dt * 0.1;
   const roadSpeed=active?18+level*.7:5;asphaltMap.offset.y=(asphaltMap.offset.y+roadSpeed*dt*.009)%1;dirtMap.offset.y=(dirtMap.offset.y+roadSpeed*dt*.004)%1;for(const m of laneMarks){m.position.z-=roadSpeed*dt;if(m.position.z<-656)m.position.z+=684}for(const p of props){p.position.z-=roadSpeed*dt;if(p.position.z<-655){p.position.z+=690;p.position.x=(Math.random()>.5?1:-1)*(12+Math.random()*65)}}for(const m of mountains){m.position.z-=roadSpeed*dt*.1;if(m.position.z<-650)m.position.z+=560}
-  const dustAttribute=dust.geometry.attributes.position;for(let i=0;i<dustCount;i++){let z=dustAttribute.getZ(i)-roadSpeed*dt*(.7+((i%7)/20));if(z<-38)z=18;dustAttribute.setZ(i,z)}dustAttribute.needsUpdate=true;
+  const dustAttribute=dust.geometry.attributes.position;for(let i=0;i<dustCount;i++){let z=dustAttribute.getZ(i)-roadSpeed*dt*(.7+((i%7)/20));let x=dustAttribute.getX(i)+Math.sin(weather.windDirection+i)*weather.windSpeed*dt*0.05;if(z<-38)z=18;dustAttribute.setX(i,x);dustAttribute.setZ(i,z)}dustAttribute.needsUpdate=true;
+  // Update smoke particles based on truck health
+  const smokeOpacity = health < 70 ? (100 - health) / 100 * 0.5 : 0;
+  smoke.material.opacity = smokeOpacity;
+  if(health < 70){
+    const smokeAttr = smoke.geometry.attributes.position;
+    for(let i=0;i<smokeCount;i++){
+      smokeVelocities[i].y += 0.01;
+      smokeVelocities[i].x += (Math.random()-0.5)*0.02;
+      let y = smokeAttr.getY(i) + smokeVelocities[i].y * 0.02;
+      if(y > 3) { y = 0; smokeVelocities[i].set((Math.random()-0.5)*0.3, Math.random()*0.2+0.1, (Math.random()-0.5)*0.3); }
+      smokeAttr.setY(i, y);
+    }
+    smoke.geometry.attributes.position.needsUpdate = true;
+  }
   const now=performance.now(),suspension=Math.sin(now*.013)*.009+Math.sin(now*.0047)*.014,bump=suspension+(Math.random()-.5)*shake;
   camera.position.set(0,2.62+bump,1.7);truck.rotation.z=Math.sin(now*.003)*.006;truck.rotation.x=Math.sin(now*.0053)*.004;
   mate.rotation.z=Math.sin(now*.006)*.018-truck.rotation.z*.7;mate.position.y=.72+suspension*.8;
@@ -279,6 +477,7 @@ function update(dt){
   if(nearest){const localTarget=truck.worldToLocal(nearest.position.clone());mate.userData.headPivot.rotation.y=THREE.MathUtils.clamp(Math.atan2(localTarget.x,-localTarget.z),-.8,.8);mate.userData.headPivot.rotation.x=THREE.MathUtils.clamp(-Math.atan2(localTarget.y-2,Math.hypot(localTarget.x,localTarget.z)),-.35,.35)}else{mate.userData.headPivot.rotation.y*=.96;mate.userData.headPivot.rotation.x*=.96}
   playerBody.position.y=-bump*.65;rifle.position.y=-.45-bump*.45;
   if(engineAudio){const target=active?1:0;engineAudio.master.gain.setTargetAtTime(.025+target*.035,audio.currentTime,.18);engineAudio.a.frequency.setTargetAtTime(38+roadSpeed*.34,audio.currentTime,.12);engineAudio.b.frequency.setTargetAtTime(58+roadSpeed*.46,audio.currentTime,.12)}
+  if(windAudio){windAudio.gain.gain.setTargetAtTime(0.01+weather.windSpeed*0.003,audio.currentTime,.3);windAudio.osc.frequency.setTargetAtTime(80+weather.windSpeed*15,audio.currentTime,.2)}
   shake*=.87;
 }
 function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.05);update(dt);renderer.render(scene,camera)}
